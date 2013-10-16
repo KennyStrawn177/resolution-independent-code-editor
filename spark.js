@@ -625,15 +625,23 @@ Spark.prototype.loadPrefsFile = function(callback) {
 
 Spark.prototype.writePrefs = function() {
   var spark = this;
+  try {
+    var checkIfPrefsExists = function(entry) {
+      spark.prefsEntry = entry;
+      entry.file(function(file) {
+        var reader = new FileReader();
+        reader.readAsText(file, 'utf-8');
+      };
+    });
+    checkIfPrefsExists();
+  }
   this.prefsEntry.createWriter(function(writer) {
     writer.truncate(0);
     writer.onwriteend = function() {
       var blob = new Blob([spark.ActiveProjectName]);
       var size = spark.ActiveProjectName.length;
       writer.write(blob);
-      writer.onwriteend = function() {
-        console.log('prefs file write complete.');
-      };
+      console.log('prefs file write complete.');
     };
   });
 };
