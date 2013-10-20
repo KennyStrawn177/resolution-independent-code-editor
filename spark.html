@@ -15,44 +15,74 @@
   <script src="ebidel/dnd.js"></script>
   <script src="ebidel/filer.min.js"></script>
 
-  <script src="htmlencode.js"></script>
+  <script src="utils/htmlencode.js"></script>
   <script src="globals.js"></script>
-  <script src="util.js"></script>
+  <script src="utils/util.js"></script>
   <script src="buffer.js"></script>
-  <script src="file_tree.js"></script>
+  <script src="file_node.js"></script>
   <script src="template_loader.js"></script>
+  <script src="spark_window.js"></script>
   <script src="spark.js"></script>
-  <script src="set.js"></script>
-  <script src="listview.js"></script>
+  <script src="modal_dialogs.js"></script>
+  <script src="tabs_manager.js"></script>
+  <script src="utils/set.js"></script>
+  <script src="widgets/listview.js"></script>
+  <script src="widgets/treeview.js"></script>
   <script src="files_list_view_controller.js"></script>
-  <script src="absolutepos.js"></script>
+  <script src="utils/absolutepos.js"></script>
+  <script src="git/api-built.js"></script>
+  <script src="git/git.js"></script>
 
   <link rel="stylesheet" href="bootstrap/css/bootstrap.min.css">
   <link rel="stylesheet" href="codemirror-3.1/lib/codemirror.css">
   <link rel="stylesheet" href="codemirror-3.1/addon/hint/show-hint.css">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="css/style.css">
 
 </head>
 
 <body>
   <div>
     <div id="top-bar">
-      <div class="btn-group" id="create-button">
-        <a class="btn btn-danger dropdown-toggle" data-toggle="dropdown" href="#">
-          Create
-          <span class="caret"></span>
-        </a>
-        <ul class="dropdown-menu">
-          <li><a tabindex="-1" data-toggle="modal" href="#AddProjectModal">Project</a></li>
-          <li><a tabindex="-1" data-toggle="modal" href="#AddFileModal">File</a></li>
-        </ul>
+      <div id="left-buttons">
+        <div class="btn-group" id="create-button">
+          <a class="btn btn-danger dropdown-toggle" data-toggle="dropdown" href="#">
+            Create
+            <span class="caret"></span>
+          </a>
+          <ul class="dropdown-menu">
+            <li><a tabindex="-1" data-toggle="modal" href="#AddProjectModal">Project</a></li>
+            <li><a tabindex="-1" data-toggle="modal" href="#AddGitProjectModal">Git Project</a></li>
+            <li><a tabindex="-1" data-toggle="modal" href="#AddFileModal">File</a></li>
+          </ul>
+        </div>
+
+        <div class="btn-group" id="git-menu-button">
+          <a class="btn dropdown-toggle" data-toggle="dropdown" href="#">
+            git
+            <span class="caret"></span>
+          </a>
+          <ul class="dropdown-menu">
+            <li><a tabindex="-1" data-toggle="modal" href="#GitPullModal"> Pull</a></li>
+            <li><a tabindex="-1" data-toggle="modal" href="#GitPushModal"> Push</a></li>
+            <li><a tabindex="-1" data-toggle="modal" href="#GitCommitModal">
+              Commit</a></li>
+            <li><a tabindex="-1" data-toggle="modal" href="#GitBranchModal">
+              Branch</a></li>
+            <li><a tabindex="-1" data-toggle="modal" href="#GitCheckoutModal">
+              Checkout</a></li>
+          </ul>
+        </div>
       </div>
       
       <div id="right-buttons">
         <button id="run-button" class="btn btn-primary tt"
         title="Reloads and runs the project in Chrome.">Run</button>
+        <button id="import-button" class="btn tt"
+        title="Imports project from system or sample apps.">Import</button>
         <button id="export-button" class="btn tt"
         title="Exports the entire project as a zip file.">Export</button>
+        <button id="publish-button" class="btn btn-primary tt"
+        title="Publish the app to the webstore.">Publish </button>
       </div>
     </div>
     
@@ -66,13 +96,149 @@
         <div class="modal-body">
           <p>Please enter the name your project:</p>
           <input type="text" placeholder="New_project" id="new-project-name"/>
+          <br/>
         </div>
         <div class="modal-footer">
           <button class="btn" data-dismiss="modal" aria-hidden="true">Cancel</button>
           <button class="btn btn-primary">Create</button>
         </div>
       </div>
-      
+
+      <!-- Modal Import Project-->
+      <div id="ImportProjectModal" class="modal hide fade" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&#215;</button>
+          <h3 id="myModalLabel">Import Project</h3>
+        </div>
+        <div class="modal-body">
+          <p>Sample Chrome Apps:</p>
+          <select id="templateProject">
+            <option> hello-world </option>
+          </select>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" data-dismiss="modal" aria-hidden="true">Cancel</button>
+          <button class="btn btn-primary">Ok</button>
+        </div>
+      </div>
+
+       <!-- Modal Git Pull -->
+      <div id="GitPullModal" class="modal hide fade" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&#215;</button>
+          <h3 id="myModalLabel">Git Pull</h3>
+        </div>
+        <div id="GitPullMessage"> </div>
+        <div class="modal-footer">
+          <button class="btn btn-primary">Ok</button>
+        </div>
+      </div>
+
+      <!-- Modal Git Push -->
+      <div id="GitPushModal" class="modal hide fade" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&#215;</button>
+          <h3 id="myModalLabel">Git Push</h3>
+        </div>
+        <div id="GitPushMessage"> </div>
+        <div class="modal-footer">
+          <button class="btn btn-primary">Ok</button>
+        </div>
+      </div>
+
+
+      <!-- Modal Git Commit -->
+      <div id="GitCommitModal" class="modal hide fade" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&#215;</button>
+          <h3 id="myModalLabel">Git Commit </h3>
+        </div>
+        <div class="modal-body">
+          Email
+          <input type="text" placeholder="xyz@abc.com" id="git-email"/>
+          Name:
+          <input type="text" placeholder="name"
+              id="git-name"/>
+          <br/>
+          Commit Message:
+          <input type="textArea" id="commit-message">
+          <br/>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" data-dismiss="modal" aria-hidden="true">Cancel</button>
+          <button class="btn btn-primary">Ok</button>
+        </div>
+      </div>
+
+      <!-- Modal Add Git Project -->
+      <div id="AddGitProjectModal" class="modal hide fade" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&#215;</button>
+          <h3 id="myModalLabel">New Git Project</h3>
+        </div>
+        <div class="modal-body">
+          Project Name:
+          <input type="text" placeholder="New_project" id="new-git-project-name"/>
+          <br/>
+          Remote Git Url:
+          <input type="text" placeholder="https://hostname/repo.git"
+              id="remote-git-url"/>
+          <br/>
+          Username:
+          <input type="text" id="git-username">
+          <br/>
+          Password:
+          <input type="password" id="git-password">
+        </div>
+        <div id="AddGitProjectModalProgressContainer" hidden>
+          <div id="AddGitProjectModalProgressLabel">Downloading repository</div>
+          <div id="AddGitProjectModalProgress">
+            <div id="AddGitProjectModalProgressBarValue">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" data-dismiss="modal" aria-hidden="true">Cancel</button>
+          <button class="btn btn-primary">Create</button>
+        </div>
+      </div>
+
+      <!-- Modal Git Branch -->
+      <div id="GitBranchModal" class="modal hide fade" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&#215;</button>
+          <h3 id="myModalLabel">Create New Branch</h3>
+        </div>
+        <div class="modal-body">
+          <p>Create a new branch from "master".</p>
+          <input type="text" placeholder="New Branch Name" id="new-branch-name"/>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" data-dismiss="modal" aria-hidden="true">Cancel</button>
+          <button class="btn btn-primary">Ok</button>
+        </div>
+      </div>
+
+      <!-- Modal Git Checkout -->
+      <div id="GitCheckoutModal" class="modal hide fade" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&#215;</button>
+          <h3 id="myModalLabel">Git Checkout</h3>
+        </div>
+        <div class="modal-body">
+          Current Branch:
+          <input type="text" placeholder="master" id="currentBranch" />
+          <br/>
+          <select id="checkoutBranch">
+            <option> abc </option>
+          </select>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" data-dismiss="modal" aria-hidden="true">Cancel</button>
+          <button class="btn btn-primary">Ok</button>
+        </div>
+      </div>
+
       <!-- Modal Add File -->
       <div id="AddFileModal" class="modal hide fade" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
         <div class="modal-header">
@@ -89,7 +255,27 @@
           <button class="btn btn-primary">Add</button>
         </div>
       </div>
-      
+
+      <!-- Modal Publish -->
+      <div id="PublishModal" class="modal hide fade" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&#215;</button>
+          <h3 id="myModalLabel">Publish to CWS</h3>
+        </div>
+        <div class="modal-body">
+        <div id="PublishModalProgressContainer">
+          <div id="PublishModalProgressLabel">Publishing to Webstore.</div>
+          <div id="PublishModalProgress">
+            <div id="PublishModalProgressBarValue">
+            </div>
+          </div>
+        </div>
+        <div id="CWSAppPublish" hidden> Published to Chrome Webstore.
+          <a id="WebstoreAppLink" target="_blank">open app in webstore.</a>  
+        </div>
+      </div>
+
+
       <!-- Modal Remove Files -->
       <div id="RemoveFilesModal" class="modal hide fade" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
         <div class="modal-header">
@@ -120,12 +306,27 @@
           <button class="btn btn-primary">Rename</button>
         </div>
       </div>
+      
+      <!-- Modal Error message -->
+      <div id="ErrorMessageModal" class="modal hide fade" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&#215;</button>
+          <h3 id="error-dialog-title">Error title</h3>
+        </div>
+        <div class="modal-body">
+          <p id="error-dialog-message">Error message</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-primary">OK</button>
+        </div>
+      </div>
     </div>
 
     <div>
       <ul id="files-menu" class="dropdown-menu" role="menu" style="position: fixed; top: 0px; left: 0px;">
         <li><a tabindex="-1" id="files-menu-remove" href="#">Delete</a></li>
         <li><a tabindex="-1" id="files-menu-rename" href="#">Rename</a></li>
+        <li><a tabindex="-1" id="files-menu-run" href="#">Run</a></li>
       </ul>
     </div>
     <div id="main-view">
@@ -155,6 +356,9 @@
         <div id="editor-placeholder-string">No file selected</div>
       </div>
     </div>
+  </div>
+  <div id="syncfs-modal" hidden>
+    <div class="syncfs-label">SyncFS initializing...</div>
   </div>
 </body>
 </html>

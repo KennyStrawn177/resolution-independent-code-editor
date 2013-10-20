@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 // Callbacks for the controller
+// The delegate can implement those methods.
 
 var FilesListViewControllerDelegate = function() {
 }
@@ -19,12 +20,18 @@ FilesListViewControllerDelegate.prototype.filesListViewControllerShowContextMenu
   // Do nothing.
 }
 
+// Here's starting the actual implementation of the controller.
+
 var FilesListViewController = function(element, delegate) {
   this.entries = null;
-  this.listView = new ListView(element, this);
-  this.listView.reloadData();
+  this.entriesHash = new Object();
+  this.childrenCache = new Object();
+  this.treeView = new TreeView(element, this);
+  this.treeView.reloadData();
   this.delegate = delegate;
   element.keydown(this.keyDown.bind(this));
+  
+  window.addEventListener("FileNodeTreeUpdated", this.onFileNodeTreeUpdated.bind(this));
 }
 
 FilesListViewController.prototype.keyDown = function(e) {
@@ -34,108 +41,182 @@ FilesListViewController.prototype.keyDown = function(e) {
   }
 }
 
-FilesListViewController.prototype.updateEntries = function(entries) {
-  this.entries = entries;
-  this.listView.reloadData();
+FilesListViewController.prototype.updateRoot = function(activeProject) {
+  this.root = activeProject;
+  this.childrenCache = new Object();
+  this.treeView.reloadData();
 }
 
-FilesListViewController.prototype.setSelection = function(selectedEntries) {
-  var indexes = new Object();
-  this.entries.forEach(function(entry, i) {
-    indexes[entry.name] = i;
+FilesListViewController.prototype.setSelection = function(selectedEntriesPaths) {
+  var selectedNodeUIDs = new Array();
+  selectedEntriesPaths.forEach(function(entry, i) {
+    selectedNodeUIDs.push(entry.name);
   });
-
-  var rowIndexes = new Array();
-  selectedEntries.forEach(function(entry, i) {
-    var idx = indexes[entry.name]
-    if (idx != null) {
-      rowIndexes.push(idx);
-    }
-  });
-  this.listView.setSelectedRows(rowIndexes);
+  this.treeView.setSelectedNodesUIDs(selectedNodeUIDs);
 }
 
 FilesListViewController.prototype.setSelectionByNames = function(names) {
-  var indexes = new Object();
-  this.entries.forEach(function(entry, i) {
-    indexes[entry.name] = i;
-  });
-
-  var rowIndexes = new Array();
-  names.forEach(function(name, i) {
-    var idx = indexes[name];
-    if (idx != null) {
-      rowIndexes.push(idx);
-    }
-  });
-  this.listView.setSelectedRows(rowIndexes);
+  this.treeView.setSelectedNodesUIDs(names);
 }
 
 FilesListViewController.prototype.selection = function() {
-  var result = new Array();
-  if (this.entries == null) {
-    return result;
-  }
-  var controller = this;
-  this.listView.selectedRows().forEach(function(rowIndex, i) {
-    result.push(controller.entries[rowIndex]);
+  var result = [];
+  this.treeView.selectedNodesUIDs().forEach(function(nodeUID, i) {
+    result.push(fileEntryMap[nodeUID].entry);
   });
+  console.log('selection: ' + result);
+  console.log(result);
   return result;
 }
 
-// Callbacks for ListView.
-FilesListViewController.prototype.listViewNumberOfRows = function() {
-  if (this.entries == null) {
-    return 0;
+// Implements TreeViewDelegate
+
+FilesListViewController.prototype.treeViewExists = function(nodeUID) {
+  var node = null;
+  if (nodeUID == null) {
+    node = this.root;
+  } else {
+    node = fileEntryMap[nodeUID];
   }
-  return this.entries.length;
+  if (node == null)
+    return false;
+  
+  return true;
 }
 
-FilesListViewController.prototype.listViewElementForRow = function(rowIndex) {
-  var fileicon = $('<img src="img/file-regular.png"/>');
-  var text = $('<span class="file-item-text">' + htmlEncode(this.entries[rowIndex].name) + '</span>');
+FilesListViewController.prototype.treeViewHasChildren = function(nodeUID) {
+  var node = null;
+  if (nodeUID == null) {
+    node = this.root;
+  } else {
+    node = fileEntryMap[nodeUID];
+  }
+  if (node == null)
+    return false;
+  
+  return Object.keys(node.children).length > 0;
+}
+
+FilesListViewController.prototype.treeViewNumberOfChildren = function(nodeUID) {
+  var node = null;
+  if (nodeUID == null) {
+    node = this.root;
+  } else {
+    node = fileEntryMap[nodeUID];
+  }
+  if (node == null)
+    return 0;
+
+  var children = this.cachedChildrenForNode(node);
+  return children.length;
+}
+
+FilesListViewController.prototype.cachedChildrenForNode = function(fileNode) {
+  var children = this.childrenCache[fileNode.entry.fullPath];
+  if (children != null) {
+    return children;
+  }
+  
+  children = [];
+  Object.keys(fileNode.children).forEach(function(childPath, i) {
+    if (fileEntryMap[childPath].entry.name == '.git')
+      return;
+    children.push(childPath);
+  });
+  children.sort(function(a,b) {
+    if (a.toLowerCase() < b.toLowerCase())
+      return -1;
+    else if (a.toLowerCase() > b.toLowerCase())
+      return 1;
+    else
+      return 0;
+  });
+  this.childrenCache[fileNode.entry.fullPath] = children;
+  
+  return children;
+}
+
+FilesListViewController.prototype.treeViewChild = function(nodeUID, childIndex) {
+  var node = null;
+  if (nodeUID == null) {
+    node = this.root;
+  } else {
+    node = fileEntryMap[nodeUID];
+  }
+  if (node == null)
+    return null;
+  
+  var children = this.cachedChildrenForNode(node);
+  return children[childIndex];
+}
+
+FilesListViewController.prototype.treeViewElementForNode = function(nodeUID) {
+  var node = fileEntryMap[nodeUID];
+  var fileicon;
+  if (node.isDirectory) {
+    fileicon = $('<img src="img/file-regular.png" class="folder-icon"/>');
+  } else {
+    fileicon = $('<img src="img/file-regular.png"/>');
+  }
+  var text = $('<span class="file-item-text">' + htmlEncode(node.entry.name) + '</span>');
   var caret = $('<span class="caret"></span>');
   var dropdown = $('<div></div>');
   var link = $('<a href="#"></a>');
   link.append(caret);
   dropdown.append(link);
-  
+
   var listitem =  $("<div class=\"file-item\"></div>");
   listitem.append(fileicon);
   listitem.append(text);
   listitem.append(dropdown);
-  var controller = this;
   
   link.click(function(e) {
     if ($('#files-menu').css('display') == 'block') {
       return;
     }
     
+    console.log('click link');
     // Select item if not selected.
     var isSelected = false;
-    controller.listView.selectedRows().forEach(function(currentRowIndex, i) {
-      if (currentRowIndex == rowIndex) {
+    this.treeView.selectedNodesUIDs().forEach(function(currentNodeUID, i) {
+      if (currentNodeUID == nodeUID) {
         isSelected = true;
       }
     });
     if (!isSelected) {
-      controller.listView.setSelectedRow(rowIndex);
+      this.treeView.setSelectedNodeUID(nodeUID);
     }
     
-    controller.delegate.filesListViewControllerShowContextMenuForElement(link, e);
-  });
+    this.delegate.filesListViewControllerShowContextMenuForElement(link, e);
+  }.bind(this));
   
   return listitem;
 }
 
-FilesListViewController.prototype.listViewHeightForRow = function(rowIndex) {
+FilesListViewController.prototype.treeViewHeightForNode = function(nodeUID) {
   return 25.;
 }
 
-FilesListViewController.prototype.listViewSelectionChanged = function(rowIndexes) {
+FilesListViewController.prototype.treeViewSelectionChanged = function(nodesUIDs) {
+  // Do nothing.
   this.delegate.filesListViewControllerSelectionChanged(this.selection());
 }
 
-FilesListViewController.prototype.listViewDoubleClicked = function(rowIndexes) {
+FilesListViewController.prototype.treeViewDoubleClicked = function(nodesUIDs) {
   this.delegate.filesListViewControllerDoubleClicked(this.selection());
+}
+
+FilesListViewController.prototype.onFileNodeTreeUpdated = function(event) {
+  var path = event.detail.path;
+  if (this.root == null)
+    return;
+
+  //console.log("updated path " + path);
+  // Update view only if updates files are in the scope of displayed files.
+  if ((path + '/').indexOf(this.root.entry.fullPath + '/') != 0)
+    return;
+  //console.log("update tree " + this.root);
+
+  this.childrenCache = new Object();
+  this.treeView.reloadData();
 }

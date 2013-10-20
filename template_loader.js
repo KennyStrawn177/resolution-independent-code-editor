@@ -2,14 +2,26 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-TemplateLoader = function(filetree, spark) {
+TemplateLoader = function(spark) {
   this.spark = spark;
-  this.filetree = filetree;
   this.pendingWrites = 0;
   this.callback = function() {};
 }
 
-TemplateLoader.prototype.loadTemplate = function(callback) {
+TemplateLoader.prototype.loadTemplate = function(projectName, callback) {
+  // Creates an empty project.
+  if (projectName == 'empty')
+    return;
+  var spark = this.spark;
+  spark.htmlfs.root.getDirectory('/.templates/' + projectName,
+      {create:false}, function(project) {
+    var root = fileEntryMap['/'];
+    project.psuedoName = spark.ActiveProjectName;
+    spark.fileOperations.copyDirectory(project, root, callback);
+  });
+
+  return;
+
   this.pendingWrites = 8;
   this.callback = callback;
   this.readFile(chrome.runtime.getURL('sample_app/manifest_2.json'),
@@ -30,47 +42,25 @@ TemplateLoader.prototype.readFile = function(url, name) {
   file.open("GET", url, true);
   file.responseType = "blob";
   var templateLoader = this;
+  var spark = templateLoader.spark;
   file.onreadystatechange = function() {
     if (file.readyState === 4)
-      if (file.status === 200)
-        templateLoader.writeFile(name, file.response);
+      if (file.status === 200) {
+        var createFileCb = function(fileEntry, is_created) {
+          var onwriteend = function() {
+            templateLoader.pendingWrites--;
+            console.log(templateLoader.pendingWrites);
+            if (!templateLoader.pendingWrites) {
+              templateLoader.callback();
+              console.log('writes done.');
+            }
+          };
+          spark.fileOperations.writeFile(fileEntry, file.response, onwriteend);
+        }
+        var root = fileEntryMap[spark.getAbsolutePath(spark.ActiveProjectName)];
+        console.log(root);
+        spark.fileOperations.createFile(name, root, createFileCb);
+        }
   }
   file.send(null);
 }
-
-TemplateLoader.prototype.writeFiles = function(entries, callback) {
-  this.callback = callback;
-  this.pendingWrites = entries.length;
-  var templateLoader = this;
-  for (var i = 0; i < entries.length; ++i) {
-    entries[i].file(function(file) {
-      var reader = new FileReader();
-      reader.readAsArrayBuffer(file);
-      reader.onload = function(ev) {
-        templateLoader.writeFile(file.name, ev.target.result)
-      };
-   }  , function() {});
-  }
-}
-
-TemplateLoader.prototype.writeFile = function(name, content) {
-  var templateLoader = this;
-  var activeProject = this.spark.projects[this.spark.ActiveProjectName];
-  activeProject.getFile(
-      name, {create: true},
-      function(entry) {
-        entry.createWriter(function(writer) {
-          writer.truncate(0);
-          writer.onwriteend = function() {
-            var blob = new Blob([content]);
-            writer.write(blob);
-            writer.onwriteend = function() {
-              templateLoader.pendingWrites--;
-              if (!templateLoader.pendingWrites)
-                templateLoader.callback();
-            };
-          };
-        });
-      });
-}
-

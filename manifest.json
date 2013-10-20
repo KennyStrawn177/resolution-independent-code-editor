@@ -16,7 +16,9 @@
     { "fileSystem": ["write"] },
     "unlimitedStorage",
     "syncFileSystem",
+    "storage",
     "developerPrivate",
+    "https://github.com/*",
     "management"
   ],
 
