@@ -80,7 +80,6 @@ FileOperations.prototype = {
         callback(entry, true);
       return;
     }
-    console.log("creating directory");
     root.entry.getDirectory(name, {create:true}, function(directory) {
       var directoryNode = new FileNode(directory, root);
       root.children[directoryNode.entry.fullPath] = directoryNode;
@@ -139,7 +138,9 @@ FileOperations.prototype = {
         };
         reader.readEntries(readEntriesCb);
       }
-      fileOperations.createDirectory(sourceEntry.name, root, createDirectoryCb);
+      var name = sourceEntry.psuedoName ? sourceEntry.psuedoName
+          : sourceEntry.name;
+      fileOperations.createDirectory(name, root, createDirectoryCb);
     } else {
       var copyFileCb = function() {
         pendingCallbacks.count--;

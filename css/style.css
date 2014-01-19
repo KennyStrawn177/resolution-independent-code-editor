@@ -21,10 +21,15 @@ body {
   outline: none;
 }
 
-#create-button {
+#left-buttons {
   position: absolute;
   left: 10px;
   top: 10px;
+  display: inline-block;
+}
+
+#create-button,
+#git-menu-button {
   display: inline-block;
 }
 
@@ -75,10 +80,6 @@ body {
 
 #edited-image {
   position: absolute;
-}
-
-#run-button {
-  margin-left: 10px;
 }
 
 .close-buffer-button {
@@ -251,7 +252,7 @@ body {
   top: 4px;
   width: 16px;
   height: 16px;
-  content: url(img/check.png);
+  content: url(../img/check.png);
 }
 
 #new-project-name {
@@ -273,7 +274,23 @@ body {
   height: 22px;
 }
 
-#run-button {
+#git-menu-button {
+  margin: 0;
+}
+
+#git-menu-button .btn {
+  background-color: #f1f1f1;
+  background-image: none;
+  border-radius: 2px;
+  border: solid 1px #c9c9c9;
+  font-size: 11px;
+  font-weight: bold;
+  -webkit-font-smoothing: antialiased;
+  height: 22px;
+}
+
+#run-button,
+#publish-button {
   background-color: #4d90fe;
   background-image: none;
   border-radius: 2px;
@@ -284,6 +301,7 @@ body {
   height: 32px;
 }
 
+#import-button,
 #export-button {
   background-color: #f1f1f1;
   background-image: none;
@@ -300,6 +318,7 @@ body {
   border: solid 1px #cbcbcb;
   padding-top: 20px;
   padding-bottom: 10px;
+  overflow-y: auto;
 }
 
 .dropdown-menu li {
@@ -341,4 +360,43 @@ body {
 .folder-expand-button.expanded > div {
   -webkit-transform: rotate(90deg);
   top: 1px;
+}
+
+#syncfs-modal:not([hidden]) {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: rgba(255, 255, 255, 0.8);
+  z-index: 99999;
+  pointer-events: none;
+}
+
+#syncfs-modal .syncfs-label {
+  text-align: center;
+  margin-top: 100px;
+  color: #888;
+}
+
+#AddGitProjectModalProgressContainer,
+#PublishModalProgressContainer{
+  padding: 20px;
+}
+
+#AddGitProjectModalProgressLabel,
+#PublishModalProgressLabel {
+
+}
+
+#AddGitProjectModalProgress,
+#PublishModalProgress {
+  border: 1px solid #ddd;
+}
+
+#AddGitProjectModalProgressBarValue,
+#PublishModalProgressBarValue {
+  transition: width 250ms;
+  height: 30px;
+  background: #ccf;
 }

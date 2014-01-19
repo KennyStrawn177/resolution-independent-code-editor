@@ -16,6 +16,8 @@ function SparkWindow(spark) {
 
   $("#run-button").click(this.handleRunButton.bind(this));
   $("#export-button").click(this.handleExportButton.bind(this));
+  $("#import-button").click(this.handleImportButton.bind(this));
+  $("#publish-button").click(this.handlePublishButton.bind(this));
   $(".tt").tooltip({ 'placement': 'bottom' });
 
 };
@@ -40,7 +42,7 @@ SparkWindow.prototype = {
     $("#files-listview").width(fileTreePaneWidth - 5);
     $("#editor-pane").css('left', fileTreePaneWidth + 'px');
     $("#editor-placeholder").css('left', fileTreePaneWidth + 'px');
-    
+
     $("#editor-pane").width(editorPaneWidth);
     $("#editor-pane").height(mainViewHeight);
     $("#file-tree").height(mainViewHeight);
@@ -127,8 +129,42 @@ SparkWindow.prototype = {
             }, 500);
           });
     };
+    var activeProject = spark.getActiveProject();
+    console.log(activeProject.entry);
     chrome.developerPrivate.exportSyncfsFolderToLocalfs(
         spark.ActiveProjectName, exportFolderCb.bind(spark));
+  },
+
+  runDirectory: function(directory, callback) {
+    var spark = this.spark;
+    var exportFolderCb = function() {
+      console.log('comes in exprot');
+
+      console.log(directory.name);
+      chrome.developerPrivate.loadProject(directory.name,
+          function(itemId) {
+            // loadProject may return before the app is actually loaded returning
+            // garbage item_id. However, a second call should succeed.
+            // TODO (grv): Listen to loadProject event and return when the app
+            // is loaded.
+            setTimeout(function() {
+              chrome.developerPrivate.loadProject(directory.name,
+                function(itemId) {
+                  setTimeout(function() {
+                    if (!itemId) {
+                      console.log('invalid itemId');
+                      return;
+                    }
+                    // Since the API doesn't wait for the item to load,may return
+                    // before it has fully loaded. Delay the launch event.
+                    chrome.management.launchApp(itemId, function(){});
+                  }, 500);
+                });
+            }, 500);
+          });
+    };
+    chrome.developerPrivate.loadDirectory(
+        directory, exportFolderCb.bind(spark));
   },
 
   handleExportButton: function(e) {
@@ -137,6 +173,44 @@ SparkWindow.prototype = {
     chrome.fileSystem.chooseEntry({ "type": "saveFile",
       "suggestedName": spark.ActiveProjectName + ".zip" },
       spark.exportProject.bind(spark));
+  },
+
+  handleImportButton: function(e) {
+    e.preventDefault();
+    var spark = this.spark;
+    $('#ImportProjectModal').modal('show');
+  },
+  handlePublishButton: function(e) {
+    e.preventDefault();
+    var spark = this.spark;
+    $('#PublishModal').modal('show');
+      $('#PublishModalProgressBarValue').width('0px');
+      $('#PublishModalProgressBarValue').show();
+      $('#PublishModalProgressContainer').removeAttr('hidden');
+      $('#PublishModalProgressContainer').show();
+        $('#CWSAppPublish').hide();
+    this.fakeUpload();
+  },
+  fakeUpload: function() {
+    var progress = 0;
+    var publishProgress = function() {
+      progress += Math.floor((Math.random() * 35) + 1);
+      if (progress > 100)
+        progress = 100;
+      $('#PublishModalProgressBarValue').width(progress + '%');
+      if (progress < 100) {
+        setTimeout(publishProgress, 300);
+        console.log(progress);
+      } else {
+        $('#PublishModalProgressBarValue').hide();
+        $('#PublishModalProgressContainer').hide();
+        var link = 'https://chrome.google.com/webstore/a/google.com/detail/todo-list/bapfgdaapcibkddlfdpbemdabhoepllh?authuser=1';
+        $('#WebstoreAppLink').attr('href', link);
+        $('#CWSAppPublish').show();
+      }
+    };
+
+    setTimeout(publishProgress, 300);
   },
 };
 

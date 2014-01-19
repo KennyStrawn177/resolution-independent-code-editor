@@ -2,14 +2,25 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+const USE_SYNC_FS = true;
+
 Spark = function() {
-  chrome.syncFileSystem.requestFileSystem(this.onSyncFileSystemOpened.bind(this));
+  $('#syncfs-modal').removeAttr('hidden');
+  if (USE_SYNC_FS) {
+    chrome.syncFileSystem.requestFileSystem(
+        this.onSyncFileSystemOpened.bind(this));
+  }
+  else {
+    window.requestFileSystem(window.PERSISTENT, 5*1024*1024*1024,
+        this.onSyncFileSystemOpened.bind(this));
+  }
 
   var spark = this;
 
   this.projects = null;
   this.sparkWindow = new SparkWindow(this);
   this.tabsManager = new TabsManager(this);
+  this.gitClient = new GitClient(this);
 
   this.filesListViewController = new FilesListViewController($('#files-listview'), this);
 
@@ -53,6 +64,15 @@ Spark.prototype.setupFileMenu = function() {
     $('#rename-file-name').val(selection[0].name);
 
     $('#RenameFilesModal').modal('show');
+  });
+  $('#files-menu-run').click(function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    var selection = spark.filesListViewController.selection();
+    console.log(selection[0]);
+    spark.sparkWindow.runDirectory(selection[0]);
+    spark.hideFileMenu();
+    console.log(e);
   });
 }
 
@@ -133,7 +153,7 @@ Spark.prototype.refreshProjectList = function() {
   });
   keys.forEach(function(name, i) {
     // Do not list prefs file as a project.
-    if (name == 'prefs')
+    if (name == 'prefs' || name == '.templates')
       return;
     var menuItem = $('<li><a tabindex="-1">' + htmlEncode(name) + '</a></li>');
     menuItem.click(this.onProjectSelect.bind(this, name));
@@ -185,51 +205,132 @@ Spark.prototype.exportProject = function(fileEntry) {
     }, errorHandler);
   }
 
-  var entries = this.getActiveProject().children;
-  var pendingWrites = Object.keys(entries).length;
+  var pendingWrites = 0;
   var zipEntry = function(entry) {
-    if (entry.isFile) {
-      entry.file(function(file) {
+    console.log(entry);
+    console.log('is file: ' + (!entry.isDirectory));
+    if (!entry.isDirectory) {
+      pendingWrites ++;
+      console.log('add file');
+      entry.entry.file(function(file) {
         var fileReader = new FileReader();
         fileReader.onload = function(e) {
-          zip.file(entry.name, e.target.result, { binary: true });
+          zip.file(entry.entry.fullPath, e.target.result, { binary: true });
           pendingWrites--;
           if (!pendingWrites)
-          writeZipFile();
+            writeZipFile();
         };
         fileReader.onerror = function(e) {
           console.log("Error while zipping: " + e.toString());
         };
         fileReader.readAsBinaryString(file);
       }, errorHandler);
-    } else {
-      // TODO(grv): handle directories
+    } else if (entry.children != null) {
+      var items = Object.keys(entry.children);
+      items.forEach(function (key, i) {
+        zipEntry(entry.children[key]);
+      });
     }
   };
 
-  for (var key in entries) {
-    zipEntry(entries[key].entry);
-  }
+  zipEntry(this.getActiveProject());
 };
 
-Spark.prototype.createProject = function(project_name, callback) {
+Spark.prototype.createProject = function(project_name, source, callback) {
 
+  var spark = this;
   var handleLoadProject = function(directory) {
     var templateLoadCb = function() {
       callback();
     };
     this.refreshProjectList();
     this.selectProject(project_name);
-    console.log(project_name);
-    console.log(this.ActiveProjectName);
-    this.templateLoader.loadTemplate(templateLoadCb.bind(this));
+    console.log('source: ' + source);
+    if (source != null) {
+      // Disable part of the dialog.
+      $('#AddGitProjectModal input').attr('disabled', 'true');
+      $('#AddGitProjectModal .btn-primary').attr('disabled', 'true');
+      // Reinit and show progress.
+      $('#AddGitProjectModalProgressBarValue').width('0px');
+      $('#AddGitProjectModalProgressContainer').removeAttr('hidden');
+      
+      if ((source.indexOf('https://github.com/') == 0) && (source.indexOf('.git', source.length - 4) == -1)) {
+        source += '.git';
+      }
+      console.log('source: ' + source);
+      var options = {
+        dir: directory.entry,
+        url: source,
+        depth: 1,
+        progress: function(info) {
+          this.updateGitCloneProgress(info);
+        }.bind(this)
+      };
+      GitApi.clone(options, function() {
+        console.log('Cloning repo' + source);
+        var cb = function() {
+          spark.refreshProjectList();
+          spark.selectProject(project_name);
+          $('#AddGitProjectModal').modal('hide')
+        };
+        spark.fileOperations.copyDirectory(directory.entry, fileEntryMap['/'], cb);
+      }, function(error) {
+        $('#AddGitProjectModal').modal('hide')
+        console.log(error);
+        this.modalDialogsController.showErrorMessage('Could not clone repository', 'The repository could not be cloned. Please check that the URL of the repository if correct, you authentication information or your internet connection.');
+      }.bind(this));
+    } else {
+      spark.templateLoader.loadTemplate('hello-world', templateLoadCb.bind(this));
+    }
   };
   this.fileOperations.createDirectory(project_name,
       fileEntryMap[this.fileSystem.root.fullPath], handleLoadProject.bind(this));
 };
 
+
+Spark.prototype.updateGitCloneProgress = function(option) {
+  $('#AddGitProjectModalProgressBarValue').width(Math.floor(option.pct) + '%');
+}
+
+Spark.prototype.downloadChromeSamples = function() {
+  var spark = this;
+
+  var callback = function(templates) {
+    var cb = function() {
+      spark.refreshProjectList();
+      spark.selectProject(spark.ActiveProjectName);
+    };
+  }
+
+
+  window.requestFileSystem(window.PERSISTENT, 5*1024*1024*1024, function(fs) {
+    spark.htmlfs = fs;
+    fs.root.getDirectory('/.templates', {create:false}, function(templates) {
+      callback(templates);
+    }, function(e) {
+      fs.root.getDirectory('/.templates', {create:true}, function(templates) {
+        var repoUrl = 'https://github.com/GoogleChrome/chrome-app-samples.git';
+        var options = {
+          dir: templates,
+          url: repoUrl,
+          depth: 1
+        };
+
+        // Disable downlaading of samples for now.
+        return;
+
+        console.log('Downloading chrome app samples from ' + repoUrl);
+
+        GitApi.clone(options, function() {
+          callback(templates);
+          console.log('downloaded chrome app samples.');
+        });
+      });
+    })
+  });
+}
+
 Spark.prototype.loadPrefs = function(callback) {
-  //var spark = this;
   chrome.storage.sync.get('last_project', function(entry) {
     if (!entry.last_project) {
       this.selectProject('sample_app');
@@ -260,17 +361,22 @@ Spark.prototype.onSyncFileSystemOpened = function(fs) {
   if (!fs) {
     if (tries) {
       tries--;
-      chrome.syncFileSystem.requestFileSystem(spark.onSyncFileSystemOpened.bind(tries, this));
+      console.log('Retrying (' + tries + ').');
+      chrome.syncFileSystem.requestFileSystem(
+          spark.onSyncFileSystemOpened.bind(this));
       return;
     }
     else {
-      console.log('unable to obtain sync filesystem.');
+      this.modalDialogsController.showErrorMessage('Google Drive is not available',
+          'Code Editor has not been able to connect to Google Drive.');
+          $('#syncfs-modal').attr('hidden', 'true');
       return;
     }
   }
 
+  $('#syncfs-modal').attr('hidden', 'true');
   window.addEventListener("FileNodeTreeUpdated", this.onFileNodeTreeUpdated.bind(this));
-  
+
   this.templateLoader = new TemplateLoader(this);
   this.activeProject = this.fileSystem.root;
   this.fileOperations = new FileOperations();
@@ -280,6 +386,7 @@ Spark.prototype.onSyncFileSystemOpened = function(fs) {
     };
 
     spark.loadPrefs(loadPrefsCb.bind(spark));
+    spark.downloadChromeSamples();
   };
 
   this.fileNode = new FileNode(this.fileSystem.root, null, fileNodeCb);
@@ -318,7 +425,6 @@ Spark.prototype.onSyncFileSystemOpened = function(fs) {
         }
       };
       var entry = item.webkitGetAsEntry();
-      console.log(fileEntryMap);
       spark.fileOperations.copyDirectory(entry,
           spark.getActiveProject(spark.ActiveProjectName), dndCallback);
       console.log(entry);
